@@ -61,7 +61,8 @@
 	    // clear the status field
 	    if( result.scenario_state == "Running" && lastScenarioState != "Running" ) {
 		lastTestIndex = logIndex;
-		$("#status").find('tbody').empty();
+		$("#result_errcount").html( "Pending" );
+		$("#result_status").html( "Test Running" );
 	    }
 	    lastScenarioState = result.scenario_state;
 
@@ -90,14 +91,17 @@
 
       function updateStatus(result) {
 	  var statusNode = $("#status").find('tbody');
-	  var correct = 1;
 	  var devicedna;
+	  var localindex = lastTestIndex;
+	  var statusList = {};
+	  var SUBMSG_CNT = 5;
 	  statusNode.empty(); // it's a full clean reparse every update...
           result.forEach(function(e) {
               d = new Date(0);
               d.setUTCSeconds(e.timestamp.secs);
               d.setMilliseconds(e.timestamp.nanos / 1000000);
-		
+
+	      $("#testerid_logindex").html( lastTestIndex );
 	      var msg;
 	      if( e.message[0] == '{' ) {
 		  try {
@@ -116,26 +120,101 @@
 		      $("#testerid_software").html( msg.tester_rev );
 		      devicedna = parseInt(msg.dna);
 		      $("#status_correctness").html( "No issues yet." );
-		      lastTestIndex = logIndex;
+		      lastTestIndex = localindex;
+		      $("#result_errcount").html( "Pending" );
+		      $("#result_status").html( "Test Running" );
+		      $("#result_status")[0].style.backgroundColor = "yellow";
+		  } else if( msg.hasOwnProperty('end_time') ) {
+		      $("#result_errcount").html( msg.test_errcount );
+		      if( msg.test_errcount == 0 ) {
+			  $("#result_status").html( "PASS" );
+			  $("#result_status")[0].style.backgroundColor = "green";
+		      } else {
+			  $("#result_status").html( "FAIL" );
+			  $("#result_status")[0].style.backgroundColor = "red";
+		      }
 		  } else {
 		      if( msg.hasOwnProperty('subtest') ) {
 			  if( parseInt(msg.dna) == devicedna ) {
-			      statusNode
-				  .append($('<tr>')
-					  .append($('<td>').text(msg.subtest))
-					  .append($('<td>').text("placeholder"))
-					  .append($('<td>').text(JSON.stringify(msg.msg)))
-					  .append($('<td>').text(d.toISOString()))
-					 );
+			      dnastring = "Match"
 			  } else {
-			      $("#status_correctness").html( "Inconsistent device DNA in logs " + msg.dna + " " + devicedna );
-			      correct = 0;
+			      dnastring = "Mismatch"
+			      $("#status_correctness").html( "Inconsistent device DNA in logs " + msg.dna + " " + devicedna + " at log offset " + localindex );
+			  }
+			  errcntobj = msg.msg[0];
+			  var errcnt = -1;
+			  if( errcntobj.hasOwnProperty('errcnt') ) {
+			      errcnt = errcntobj.errcnt;
+			  } else {
+			      errcnt = -1;
+			  }
+			  if( !statusList.hasOwnProperty(msg.subtest) ) {
+			      var submsg = [];
+			      submsg.push(JSON.stringify(msg.msg));
+			      if( errcnt != -1 ) {
+				  if( errcnt == 0 ) {
+				      statusList[msg.subtest] = [dnastring, "PASS", submsg, d.toISOString()];
+				  } else {
+				      statusList[msg.subtest] = [dnastring, "FAIL", submsg, d.toISOString()];
+				  }
+			      } else {
+				  statusList[msg.subtest] = [dnastring, "Running...", submsg, d.toISOString()];
+			      }
+			  } else {
+			      if( errcnt != -1 ) {
+				  if( errcnt == 0 ) {
+				      statusList[msg.subtest][1] = "PASS";
+				  } else {
+				      statusList[msg.subtest][1] = "FAIL";
+				  }
+			      }
+			      if( statusList[msg.subtest][2].length < SUBMSG_CNT ) {
+				  statusList[msg.subtest][2].push( JSON.stringify(msg.msg) );
+			      } else {
+				  statusList[msg.subtest][2].shift();
+				  statusList[msg.subtest][2].push( JSON.stringify(msg.msg) );
+			      }
 			  }
 		      }
 		  }
-		  
 	      }
-          });
+	      localindex++;
+	  });
+	  for( var key in statusList ) {
+	      value = statusList[key];
+	      var prettymsg = "";
+	      value[2].forEach(function(e) {
+		  prettymsg = prettymsg + "<br>" + e;
+	      });
+	      if( value[1] == "PASS" ) {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html("<p style=\"background-color:Green;\">" + value[1] + "</p>"))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      } else if( value[1] == "FAIL" ) {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html("<p style=\"background-color:Red;\">" + value[1] + "</p>"))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      } else {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html(value[1]))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      }
+	  }
       }
 
       function updateLogs(result) {
@@ -198,12 +277,14 @@
         <div>Rev: <span id="testerid_rev"></span></div>
         <div>DNA: <span id="testerid_dna"></span></div>
         <div>Tester software rev: <span id="testerid_software"></span></div>
+        <div>Test log index: <span id="testerid_logindex"></span></div>
     </section>
     <table id="status">
         <div>Test program correctness flag: <span id="status_correctness"></span></div>
         <thead>
             <tr>
                 <th>Subtest</th>
+                <th>DNA</th>
                 <th>Status</th>
                 <th>Message</th>
                 <th>Timestamp</th>
@@ -213,6 +294,10 @@
             <tr></tr>
         </tbody>
     </table>
+    <section id="resultsection">
+        <div>Final error count: <span id="result_errcount"></span></div>
+        <div>Status: <span id="result_status"></span></div>
+    </section>
     <hr>
     <table id="tests">
         <thead>

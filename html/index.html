@@ -1,38 +1,25 @@
 <!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Jig//20</title>
-
-    <link rel="stylesheet" type="text/css" href="/css/demo.css">
-    <link rel="stylesheet" type="text/css" href="/js/jquery.gridster.min.css">
-    <script src="/js/jquery-3.1.1.js"
+    <script
+            src="/js/jquery-3.1.1.js"
             crossorigin="anonymous"></script>
-    <script src="/js/jquery.gridster.min.js"
-            type="text/javascript"
-            charset="utf-8"></script>
-
-    <script type="text/javascript">
-        var gridster = null;
-        $(document).ready(function () {
-            gridster = $(".gridster ul").gridster({
-                widget_base_dimensions: ['auto', 200],
-                autogenerate_stylesheet: true,
-                min_cols: 1,
-                max_cols: 5,
-                widget_margins: [5, 5],
-                resize: {
-                    enabled: true
-                }
-            }).data('gridster');
-            $('.gridster  ul').css({'padding': '0'});
-        });
-    </script>
+    <meta charset="utf-8">
+    <style class="text/css">
+        table {
+            border: 1px solid;
+            padding: 2px;
+        }
+        td {
+            border: 1px solid;
+            padding: 2px;
+        }
+    </style>
 </head>
 <body>
     <script>
-        var logIndex = 0;
-        var selectedScenario;
-		var scenarioState;
+      var logIndex = 0;
+      var lastScenarioState = "";
 
         function result_to_string(r) {
             if (r === undefined) {
@@ -68,25 +55,38 @@
             $("#scenarioid").html(result.scenario);
             $("#scenarioname").html(result.scenario_names[result.scenario]);
             $("#scenariodescription").html(result.scenario_descriptions[result.scenario]);
-            $("#scenariostate").html(result.scenario_state);
-			scenarioState = result.scenario_state;
+	    $("#scenariostate").html(result.scenario_state);
+	    if( result.scenario_state == "Running" ) {
+		$("#scenariostate")[0].style.backgroundColor = "yellow";
+	    } else if( result.scenario_state == "Fail" ) {
+		$("#scenariostate")[0].style.backgroundColor = "red";
+	    } else if( result.scenario_state == "Pass" ) {
+		$("#scenariostate")[0].style.backgroundColor = "green";
+	    } else {
+		$("#scenariostate")[0].style.backgroundColor = "white";
+	    }
+	    
+	    // clear the status field
+	    if( result.scenario_state == "Running" && lastScenarioState != "Running" ) {
+		$("#result_errcount").html( "Pending" );
+		$("#result_status").html( "Test Running" );
+		$("#result_status")[0].style.backgroundColor = "yellow";
+		test_errcount = 0;
+	    }
+	    lastScenarioState = result.scenario_state;
 
-			if (scenarioState == "Running") {
-				document.getElementById("startstop-button").value = "Stop Tests";
-			}
-			else {
-				document.getElementById("startstop-button").value = "Start Tests";
-			}
-
-            var selectedScenario = selectedScenario || result.scenario;
+            var scenario_id = $('#scenarioselect').val() || result.scenario;
             $("#scenarioselect").empty();
             result.scenarios.forEach(function(e) {
-                $("#scenarioselect").append($('<div>').text(result.scenario_names[e]).click(function(event) { changeScenario(e); }));
+                $("#scenarioselect").append($('<option>', {
+                    value: e,
+                    selected: e === scenario_id
+                }).text(result.scenario_names[e]));
             });
 
             $('#tests').find('tbody').empty();
-            if (result.tests[selectedScenario] !== undefined) {
-                result.tests[selectedScenario].forEach(function(e) {
+            if (result.tests[scenario_id] !== undefined) {
+                result.tests[scenario_id].forEach(function(e) {
                     $('#tests').find('tbody')
                         .append($('<tr>')
                             .append($('<td>').text(e))
@@ -98,31 +98,147 @@
             }
         }
 
-        function pad(n, width, z) {
-            z = z || '0';
-            n = n + '';
-            return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-        }
+      function updateStatus(result) {
+	  var statusNode = $("#status").find('tbody');
+	  var devicedna;
+	  var statusList = {};
+	  var SUBMSG_CNT = 4;
+	  var test_errcount = 0;
+	  statusNode.empty(); // it's a full clean reparse every update...
+          result.forEach(function(e) {
+              d = new Date(0);
+              d.setUTCSeconds(e.timestamp.secs);
+              d.setMilliseconds(e.timestamp.nanos / 1000000);
 
-        function updateLogs(result) {
+	      var msg;
+	      if( e.message[0] == '{' ) {
+		  try {
+		      msg = JSON.parse( e.message );
+		  } catch(err) {
+		      if( err == SyntaxError ) {
+			  bar = 1;
+		      }
+		  }
+		  
+		  if( msg.hasOwnProperty('start_time') ) {
+		      // populate the jig ID fields and remember the DNA, always check on future records
+		      $("#testerid_model").html(msg.model);
+		      $("#testerid_rev").html(msg.rev);
+		      $("#testerid_dna").html( parseInt(msg.dna).toString(16) );
+		      $("#testerid_software").html( msg.tester_rev );
+		      devicedna = parseInt(msg.dna);
+		      $("#status_correctness").html( "No issues yet." );
+		      $("#result_errcount").html( "Pending" );
+		      $("#result_status").html( "Test Running" );
+		      $("#result_status")[0].style.backgroundColor = "yellow";
+		      can_update_errcount = 1;
+		  } else if( msg.hasOwnProperty('end_time') ) {
+		      test_errcount = test_errcount + msg.test_errcount;
+		      $("#result_errcount").html( test_errcount );
+		      if( test_errcount == 0 ) {
+			  $("#result_status").html( "PASS" );
+			  $("#result_status")[0].style.backgroundColor = "green";
+		      } else {
+			  $("#result_status").html( "FAIL" );
+			  $("#result_status")[0].style.backgroundColor = "red";
+		      }
+		  } else {
+		      if( msg.hasOwnProperty('subtest') ) {
+			  if( parseInt(msg.dna) == devicedna ) {
+			      dnastring = "Match"
+			  } else {
+			      dnastring = "Mismatch"
+			      $("#status_correctness").html( "Inconsistent device DNA in logs " + msg.dna + " " + devicedna );
+			  }
+			  errcntobj = msg.msg[0];
+			  var errcnt = -1;
+			  if( errcntobj.hasOwnProperty('errcnt') ) {
+			      errcnt = errcntobj.errcnt;
+			  } else {
+			      errcnt = -1;
+			  }
+			  if( !statusList.hasOwnProperty(msg.subtest) ) {
+			      var submsg = [];
+			      submsg.push(JSON.stringify(msg.msg));
+			      if( errcnt != -1 ) {
+				  if( errcnt == 0 ) {
+				      statusList[msg.subtest] = [dnastring, "PASS", submsg, d.toISOString()];
+				  } else {
+				      statusList[msg.subtest] = [dnastring, "FAIL", submsg, d.toISOString()];
+				  }
+			      } else {
+				  statusList[msg.subtest] = [dnastring, "Running...", submsg, d.toISOString()];
+			      }
+			  } else {
+			      if( errcnt != -1 ) {
+				  if( errcnt == 0 ) {
+				      statusList[msg.subtest][1] = "PASS";
+				  } else {
+				      statusList[msg.subtest][1] = "FAIL";
+				  }
+			      }
+			      if( statusList[msg.subtest][2].length < SUBMSG_CNT ) {
+				  statusList[msg.subtest][2].push( JSON.stringify(msg.msg) );
+			      } else {
+				  statusList[msg.subtest][2].shift();
+				  statusList[msg.subtest][2].push( JSON.stringify(msg.msg) );
+			      }
+			  }
+		      }
+		  }
+	      }
+	  });
+	  for( var key in statusList ) {
+	      value = statusList[key];
+	      var prettymsg = "";
+	      value[2].forEach(function(e) {
+		  prettymsg = prettymsg + "<br>" + e;
+	      });
+	      if( value[1] == "PASS" ) {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html("<p style=\"background-color:Green;\">" + value[1] + "</p>"))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      } else if( value[1] == "FAIL" ) {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html("<p style=\"background-color:Red;\">" + value[1] + "</p>"))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      } else {
+		  statusNode
+		      .append($('<tr>')
+			      .append($('<td>').text(key))
+			      .append($('<td>').text(value[0]))
+			      .append($('<td>').html(value[1]))
+			      .append($('<td>').html(prettymsg))
+			      .append($('<td>').text(value[3]))
+			     );
+	      }
+	  }
+      }
+
+      function updateLogs(result) {
             var logNode = $("#logs").find('tbody');
             result.forEach(function(e) {
-                var d = new Date(0);
+                d = new Date(0);
                 d.setUTCSeconds(e.timestamp.secs);
                 d.setMilliseconds(e.timestamp.nanos / 1000000);
-                var timeText = d.getHours() + ":"
-                             + pad(d.getMinutes(), 2) + ":"
-                             + pad(d.getSeconds(), 2) + "."
-                             + pad(d.getMilliseconds(), 3);
                 logNode
                     .prepend($('<tr>')
                         .append($('<td>').text(e.message_class))
                         .append($('<td>').text(e.unit_type))
                         .append($('<td>').text(e.unit_id))
-                        .append($('<td>').text(timeText))
+                        .append($('<td>').text(d))
                         .append($('<td>').text(e.message))
                     );
-
                 // When the next log request is made, don't include the recently-appended node.
                 logIndex++;
             });
@@ -135,15 +251,17 @@
         function fireUpdate() {
             queueUpdate(500);
             $.ajax({url: "/current.json", success: updateStuff});
+            $.ajax({url: "/log/current.json", success: updateStatus});
             $.ajax({url: "/log.json?start=" + logIndex, success: updateLogs});
         }
-
-        function changeScenario(new_scenario_id) {
+        function changeScenario(e) {
+            var new_scenario_id = $('#scenarioselect').val();
             $.ajax({url: "/scenario?" + new_scenario_id, success: function(){}});
             return true;
         }
 
         $(document).ready(function() {
+            $('#scenarioselect').on("change", changeScenario);
             $('#exit-button').on('click', function() {
                 $.ajax({
                     url: "/exit",
@@ -151,109 +269,90 @@
                 });
             });
             $('#startstop-button').on('click', function() {
-				url = "/start";
-				if (scenarioState == "Running") {
-					url = "/abort";
-				}
                 $.ajax({
-                    url: url,
+                    url: "/start",
                     success: function(){}
                 });
             });
-            var boxes = $('li > .gridster-box');
-            boxes.each(function(i, box) {
-                var title = box.getAttribute('data-title');
-                if (title === undefined)
-                    return;
-                $(box).prepend($('<h1>').text(title));
-            });
             fireUpdate();
         })
-    </script>
+	</script>
     
-    <div class="content">
-    <h1>Jig Dashboard</h1>
-    <p>Things work.  Neato.</p>
-</div>
-<div class="gridster">
-    <ul>
-        <li data-sizey="1" data-sizex="1" data-col="4" data-row="1">
-            <div class="gridster-box" data-tile="Foobar" data-view="Text" data-title="Scenarios">
-                <section id="scenariolist">
-                    <div name="scenarioselect" id="scenarioselect">
-                    </div>
-                </section>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="1" data-col="5" data-row="2">
-            <div class="gridster-box" data-title="Current Scenario">
-                <section id="scenariosection">
-                    <!--div>Scenario: <span id="scenarioid"></span></div-->
-                    <div id="scenarioname"></div>
-                    <div id="scenariodescription"></div>
-                </section>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="1" data-col="2" data-row="3">
-            <div class="gridster-box" data-title="Jig">
-                <section id="jigsection">
-                    <!--div>Jig: <span id="jigid"></span></div-->
-                    <div id="jigname"></div>
-                    <div id="jigdescription"></div>
-                </section>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="4" data-col="1" data-row="1">
-            <div class="gridster-box">
-                <table id="tests">
-                    <thead>
-                        <tr>
-                            <th>Test ID</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Result</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="4" data-col="3" data-row="1">
-            <div class="gridster-box">
-                <table id="logs">
-                    <thead>
-                        <tr>
-                            <th>Class</th>
-                            <th>Unit Type</th>
-                            <th>Unit ID</th>
-                            <th>Timestamp</th>
-                            <th>Message</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr></tr>
-                    </tbody>
-                </table>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="1" data-col="3" data-row="3">
-            <div class="gridster-box" data-title="Status">
-                <input type="submit" id="startstop-button" value="Start Tests">
-                <div id="scenariostate"></div>
-            </div>
-        </li>
-        <li data-sizey="1" data-sizex="1" data-col="1" data-row="3">
-            <div class="gridster-box">
-                <div>Server ID: <span id="serverid"></span></div>
-                <div><input type="submit" id="exit-button" value="Quit Server"></div>
-            </div>
-        </li>
-    </ul>
-</div>
-
-
+    <!-- HTML starts here -->
+    <div>Test state: <span id="scenariostate"></span></div>
+    <section id="testeridsection">
+      <div>Model: <span id="testerid_model"></span>, Rev: <span id="testerid_rev"></span>, Tester software rev: <span id="testerid_software"></span></div>
+      <div>DNA: <span id="testerid_dna"></span></div>
+    </section>
+    <table id="status">
+        <thead>
+            <tr>
+                <th>Subtest</th>
+                <th>DNA</th>
+                <th>Status</th>
+                <th>Message</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr></tr>
+        </tbody>
+    </table>
+    <section id="resultsection">
+        <div>Final error count: <span id="result_errcount"></span></div>
+        <div>Functional test status: <span id="result_status"></span></div>
+    </section>
+    <div>Test program correctness flag: <span id="status_correctness"></span></div>
+    <hr>
+    <table id="tests">
+        <thead>
+            <tr>
+                <th>Test ID</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+            </tr>
+        </tbody>
+    </table>
+    <hr>
+    <div>Server ID: <span id="serverid"></span></div>
+    <div><input type="submit" id="startstop-button" value="Start Tests"></div>
+    <hr>
+    <section id="scenariosection">
+        <div>Scenario: <span id="scenarioid"></span></div>
+        <div>Scenario name: <span id="scenarioname"></span></div>
+        <div>Scenario description: <span id="scenariodescription"></span></div>
+    </section>
+    <hr>
+    <section id="jigsection">
+        <div>Jig: <span id="jigid"></span></div>
+        <div>Jig name: <span id="jigname"></span></div>
+        <div>Jig description: <span id="jigdescription"></span></div>
+    </section>
+    <hr>
+    <section id="scenariolist"><label for="scenarioselect">Available Scenarios</label>
+        <select name="scenarioselect" id="scenarioselect" size="5">
+        </select>
+    </section>
+    <div><input type="submit" id="exit-button" value="Quit Server"></div>
+    <hr>
+    <table id="logs">
+        <thead>
+            <tr>
+                <th>Class</th>
+                <th>Unit Type</th>
+                <th>Unit ID</th>
+                <th>Timestamp</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr></tr>
+        </tbody>
+    </table>
 </body>
 </html>

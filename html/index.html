@@ -7,8 +7,9 @@
     <meta charset="utf-8">
     <style class="text/css">
         table {
+	    font-size: 12px;
             border: 1px solid;
-            padding: 2px;
+            padding: 1px;
         }
         td {
             border: 1px solid;
@@ -17,9 +18,15 @@
     </style>
 </head>
 <body>
+    <audio id="alert-tone">
+      <source src="tester-alert.wav" type="audio/wav">
+    </audio>
+    
     <script>
       var logIndex = 0;
       var lastScenarioState = "";
+      var testerAlertTone = document.getElementById("alert-tone");
+      var alertPlayed = 0;
 
         function result_to_string(r) {
             if (r === undefined) {
@@ -72,6 +79,7 @@
 		$("#result_status").html( "Test Running" );
 		$("#result_status")[0].style.backgroundColor = "yellow";
 		test_errcount = 0;
+		alertPlayed = 0;
 	    }
 	    lastScenarioState = result.scenario_state;
 
@@ -160,6 +168,10 @@
 			  if( !statusList.hasOwnProperty(msg.subtest) ) {
 			      var submsg = [];
 			      submsg.push(JSON.stringify(msg.msg));
+			      if( msg.subtest == "LED" && !alertPlayed ) {
+				  testerAlertTone.play();
+				  alertPlayed = 1;
+			      }
 			      if( errcnt != -1 ) {
 				  if( errcnt == 0 ) {
 				      statusList[msg.subtest] = [dnastring, "PASS", submsg, d.toISOString()];
@@ -279,6 +291,7 @@
 	</script>
     
     <!-- HTML starts here -->
+    <p>
     <div>Test state: <span id="scenariostate"></span></div>
     <section id="testeridsection">
       <div>Model: <span id="testerid_model"></span>, Rev: <span id="testerid_rev"></span>, Tester software rev: <span id="testerid_software"></span></div>
@@ -354,5 +367,6 @@
             <tr></tr>
         </tbody>
     </table>
+    </p>
 </body>
 </html>

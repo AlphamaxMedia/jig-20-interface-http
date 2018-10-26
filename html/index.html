@@ -106,6 +106,49 @@
             }
         }
 
+      function checksupply( supply_string, value ) {
+	  var numregex = /[+-]?\d+(?:\.\d+)?/g;
+
+	  if( supply_string.charAt(0) != 'I' ) {
+	      nom_v = parseFloat(numregex.exec( supply_string )) * 1000.0;
+
+	      if( nom_v != 12 ) {
+		  if( (value > nom_v * 1.05) || (value < nom_v * 0.95) ) {  // 5% tolerance
+		      return "<p style=\"background-color:Red;\">FAIL</p>"
+		  } else {
+		      return "<p style=\"background-color:Green;\">PASS</p>"
+		  }
+	      } else {
+		  if( (value > nom_v * 1.10) || (value < nom_v * 0.90) ) {  // 10% on adapter
+		      return "<p style=\"background-color:Red;\">FAIL</p>"
+		  } else {
+		      return "<p style=\"background-color:Green;\">PASS</p>"
+		  }
+	      }
+	  } else {
+	      if( (value > 600) || (value < 8) ) {  // amperage bounds in mA
+		  return "<p style=\"background-color:Red;\">FAIL</p>"
+	      } else {
+		  return "<p style=\"background-color:Green;\">PASS</p>"
+	      }
+	  }
+	  
+      }
+      function parse_voltage(msg) {
+	  var voltageNode = $("#voltage").find('tbody');
+	  voltageNode.empty();
+	  for( var supply in msg ) {
+	      if( msg.hasOwnProperty( supply ) ) {
+		  voltageNode
+		      .append($('<tr>')
+			      .append($('<td>').text(supply))
+			      .append($('<td>').text( parseFloat(msg[supply]) / 1000 ))
+			      .append($('<td>').html(checksupply( supply, msg[supply]) ))
+			     );
+	      }
+	  }
+      }
+      
       function updateStatus(result) {
 	  var statusNode = $("#status").find('tbody');
 	  var devicedna;
@@ -154,6 +197,8 @@
 		      if( msg.hasOwnProperty('subtest') ) {
 			  if( parseInt(msg.dna) == devicedna ) {
 			      dnastring = "Match"
+			  } else if( parseInt(msg.dna) == -1 ) {
+			      dnastring = "N/A"
 			  } else {
 			      dnastring = "Mismatch"
 			      $("#status_correctness").html( "Inconsistent device DNA in logs " + msg.dna + " " + devicedna );
@@ -171,6 +216,9 @@
 			      if( msg.subtest == "LED" && !alertPlayed ) {
 				  testerAlertTone.play();
 				  alertPlayed = 1;
+			      }
+			      if( msg.subtest == "voltage" || msg.subtest == "power" ) {
+				  parse_voltage(msg.msg[0]);
 			      }
 			      if( errcnt != -1 ) {
 				  if( errcnt == 0 ) {
@@ -305,6 +353,18 @@
                 <th>Status</th>
                 <th>Message</th>
                 <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr></tr>
+        </tbody>
+    </table>
+    <table id="voltage">
+        <thead>
+            <tr>
+                <th>Supply</th>
+                <th>Measured</th>
+                <th>Status</th>
             </tr>
         </thead>
         <tbody>

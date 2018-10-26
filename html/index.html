@@ -15,6 +15,16 @@
             border: 1px solid;
             padding: 2px;
         }
+	* {
+	    box-sizing: border-box;
+	}
+	.row {
+	    display: flex;
+	}
+	.column {
+	    flex: 50%;
+	    padding: 5px;
+	}
     </style>
 </head>
 <body>
@@ -339,7 +349,8 @@
 	</script>
     
     <!-- HTML starts here -->
-    <p>
+    <div class="row">
+      <div class="column">
     <div>Test state: <span id="scenariostate"></span></div>
     <section id="testeridsection">
       <div>Model: <span id="testerid_model"></span>, Rev: <span id="testerid_rev"></span>, Tester software rev: <span id="testerid_software"></span></div>
@@ -377,6 +388,31 @@
     </section>
     <div>Test program correctness flag: <span id="status_correctness"></span></div>
     <hr>
+    <section id="jigsection">
+        <div>Jig: <span id="jigid"></span></div>
+        <div>Jig name: <span id="jigname"></span></div>
+        <div>Jig description: <span id="jigdescription"></span></div>
+    </section>
+    <hr>
+    <section id="scenariolist"><label for="scenarioselect">Available Scenarios</label>
+        <select name="scenarioselect" id="scenarioselect" size="5">
+        </select>
+    </section>
+    <section id="scenariosection">
+        <div>Scenario: <span id="scenarioid"></span></div>
+        <div>Scenario name: <span id="scenarioname"></span></div>
+        <div>Scenario description: <span id="scenariodescription"></span></div>
+    </section>
+    <hr>
+    <div><input type="submit" id="exit-button" value="Quit Server"></div>
+    <hr>
+      </div>
+
+      
+      <div class="column" style="background-color:#ddd;">
+    <div>Server ID: <span id="serverid"></span></div>
+    <div><input type="submit" id="startstop-button" value="Start Tests"></div>
+    <hr>
     <table id="tests">
         <thead>
             <tr>
@@ -392,27 +428,6 @@
         </tbody>
     </table>
     <hr>
-    <div>Server ID: <span id="serverid"></span></div>
-    <div><input type="submit" id="startstop-button" value="Start Tests"></div>
-    <hr>
-    <section id="scenariosection">
-        <div>Scenario: <span id="scenarioid"></span></div>
-        <div>Scenario name: <span id="scenarioname"></span></div>
-        <div>Scenario description: <span id="scenariodescription"></span></div>
-    </section>
-    <hr>
-    <section id="jigsection">
-        <div>Jig: <span id="jigid"></span></div>
-        <div>Jig name: <span id="jigname"></span></div>
-        <div>Jig description: <span id="jigdescription"></span></div>
-    </section>
-    <hr>
-    <section id="scenariolist"><label for="scenarioselect">Available Scenarios</label>
-        <select name="scenarioselect" id="scenarioselect" size="5">
-        </select>
-    </section>
-    <div><input type="submit" id="exit-button" value="Quit Server"></div>
-    <hr>
     <table id="logs">
         <thead>
             <tr>
@@ -427,6 +442,6 @@
             <tr></tr>
         </tbody>
     </table>
-    </p>
+    </div>
 </body>
 </html>

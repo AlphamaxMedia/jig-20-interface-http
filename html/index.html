@@ -122,7 +122,7 @@
 	  if( supply_string.charAt(0) != 'I' ) {
 	      nom_v = parseFloat(numregex.exec( supply_string )) * 1000.0;
 
-	      if( supply_string.includes("1.2VE") { // special case the 1.2VE tolerance, it's an untrimmed LDO
+	      if( supply_string.includes("1.2VE") ) { // special case the 1.2VE tolerance, it's an untrimmed LDO
 		  if( (value > nom_v * 1.065) || (value < nom_v * 0.935) ) {  // 6.5% tolerance
 		      return "<p style=\"background-color:Red;\">FAIL</p>"
 		  } else {
